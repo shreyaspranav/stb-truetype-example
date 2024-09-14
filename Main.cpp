@@ -40,6 +40,8 @@ Sections
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 // GLOBAL SETTINGS: ------------------------------------------------------------------------------------------------------------------------------
 std::string textToDisplay = "This is some text rendered in OpenGL.";
@@ -203,6 +205,9 @@ static uint8_t* SetupFont(const std::string& fontFile)
 
     delete[] fontDataBuf;
 
+    // Optionally write the font atlas texture as a png file.
+    stbi_write_png("fontAtlas.png", fontAtlasWidth, fontAtlasHeight, 1, fontAtlasTextureData, fontAtlasWidth);
+    
     return fontAtlasTextureData;
 }
 
@@ -241,7 +246,6 @@ static void DrawText(const std::string& text, glm::vec3 position, glm::vec4 colo
 
         // The units of the fields of the above structs are in pixels, 
         // convert them to a unit of what we want be multilplying to pixelScale  
-
         glm::vec2 glyphSize = 
         {
             (packedChar->x1 - packedChar->x0) * pixelScale * size,
