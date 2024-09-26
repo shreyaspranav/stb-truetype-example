@@ -54,6 +54,9 @@ const uint32_t charsToIncludeInFontAtlas = 95; // Include 95 charecters
 const uint32_t fontAtlasWidth = 512;
 const uint32_t fontAtlasHeight = 512;
 
+const float fontSize = 64.0f; 
+
+
 // Window Settings:
 constexpr uint32_t WIDTH  = 800;
 constexpr uint32_t HEIGHT = 600;
@@ -124,6 +127,9 @@ struct LocalState
     stbtt_packedchar packedChars[charsToIncludeInFontAtlas];
     stbtt_aligned_quad alignedQuads[charsToIncludeInFontAtlas];
 
+    // Maximum pixel height of the text.
+    uint32_t textHeight;
+
     glm::mat4 viewProjectionMat;
 
     // OpenGL Renderer IDs: ----------------
@@ -163,8 +169,6 @@ static uint8_t* SetupFont(const std::string& fontFile)
         std::cerr << "stbtt_InitFont() Failed!\n";
 
     uint8_t* fontAtlasTextureData = new uint8_t[fontAtlasWidth * fontAtlasHeight];
-
-    float fontSize = 64.0f;
     
     stbtt_pack_context ctx;
 
@@ -235,61 +239,75 @@ static void DrawText(const std::string& text, glm::vec3 position, glm::vec4 colo
     int order[6] = { 0, 1, 2, 0, 2, 3 };
     float pixelScale = 2.0f / localState.currentWindowHeight;
 
+    glm::vec3 localPosition = position;
+
     for(char ch : text)
     {
-        if(localState.vertices.size() <= localState.vertexIndex)
-            localState.vertices.resize(localState.vertices.size() + 6);
-
-        // Retrive the data that is used to render a glyph of charecter 'ch'
-        stbtt_packedchar* packedChar = &localState.packedChars[ch - codePointOfFirstChar]; 
-        stbtt_aligned_quad* alignedQuad = &localState.alignedQuads[ch - codePointOfFirstChar];
-
-        // The units of the fields of the above structs are in pixels, 
-        // convert them to a unit of what we want be multilplying to pixelScale  
-        glm::vec2 glyphSize = 
+        // Check if the charecter glyph is in the font atlas.
+        if(ch >= codePointOfFirstChar && ch <= codePointOfFirstChar + charsToIncludeInFontAtlas)
         {
-            (packedChar->x1 - packedChar->x0) * pixelScale * size,
-            (packedChar->y1 - packedChar->y0) * pixelScale * size
-        };
+            if(localState.vertices.size() <= localState.vertexIndex)
+                localState.vertices.resize(localState.vertices.size() + 6);
 
-        glm::vec2 glyphBoundingBoxBottomLeft = 
-        {
-            position.x + (packedChar->xoff * pixelScale * size),
-            position.y - (packedChar->yoff + packedChar->y1 - packedChar->y0) * pixelScale * size
-        };
+            // Retrive the data that is used to render a glyph of charecter 'ch'
+            stbtt_packedchar* packedChar = &localState.packedChars[ch - codePointOfFirstChar]; 
+            stbtt_aligned_quad* alignedQuad = &localState.alignedQuads[ch - codePointOfFirstChar];
 
-        // The order of vertices of a quad goes top-right, top-left, bottom-left, bottom-right
-        glm::vec2 glyphVertices[4] = 
-        {
-            { glyphBoundingBoxBottomLeft.x + glyphSize.x, glyphBoundingBoxBottomLeft.y + glyphSize.y },
-            { glyphBoundingBoxBottomLeft.x, glyphBoundingBoxBottomLeft.y + glyphSize.y },
-            { glyphBoundingBoxBottomLeft.x, glyphBoundingBoxBottomLeft.y },
-            { glyphBoundingBoxBottomLeft.x + glyphSize.x, glyphBoundingBoxBottomLeft.y },
-        };
+            // The units of the fields of the above structs are in pixels, 
+            // convert them to a unit of what we want be multilplying to pixelScale  
+            glm::vec2 glyphSize = 
+            {
+                (packedChar->x1 - packedChar->x0) * pixelScale * size,
+                (packedChar->y1 - packedChar->y0) * pixelScale * size
+            };
 
-        glm::vec2 glyphTextureCoords[4] = 
-        {
-            { alignedQuad->s1, alignedQuad->t0 },
-            { alignedQuad->s0, alignedQuad->t0 },
-            { alignedQuad->s0, alignedQuad->t1 },
-            { alignedQuad->s1, alignedQuad->t1 },
-        };
+            glm::vec2 glyphBoundingBoxBottomLeft = 
+            {
+                localPosition.x + (packedChar->xoff * pixelScale * size),
+                localPosition.y - (packedChar->yoff + packedChar->y1 - packedChar->y0) * pixelScale * size
+            };
 
-        // We need to fill the vertex buffer by 6 vertices to render a quad as we are rendering a quad as 2 triangles
-        // The order used is in the 'order' array
-        // order = [0, 1, 2, 0, 2, 3] is meant to represent 2 triangles: 
-        // one by glyphVertices[0], glyphVertices[1], glyphVertices[2] and one by glyphVertices[0], glyphVertices[2], glyphVertices[3]
-        for(int i = 0; i < 6; i++)
-        {
-            localState.vertices[localState.vertexIndex + i].position = glm::vec3(glyphVertices[order[i]], position.z);
-            localState.vertices[localState.vertexIndex + i].color = color;
-            localState.vertices[localState.vertexIndex + i].texCoord = glyphTextureCoords[order[i]];
+            // The order of vertices of a quad goes top-right, top-left, bottom-left, bottom-right
+            glm::vec2 glyphVertices[4] = 
+            {
+                { glyphBoundingBoxBottomLeft.x + glyphSize.x, glyphBoundingBoxBottomLeft.y + glyphSize.y },
+                { glyphBoundingBoxBottomLeft.x, glyphBoundingBoxBottomLeft.y + glyphSize.y },
+                { glyphBoundingBoxBottomLeft.x, glyphBoundingBoxBottomLeft.y },
+                { glyphBoundingBoxBottomLeft.x + glyphSize.x, glyphBoundingBoxBottomLeft.y },
+            };
+
+            glm::vec2 glyphTextureCoords[4] = 
+            {
+                { alignedQuad->s1, alignedQuad->t0 },
+                { alignedQuad->s0, alignedQuad->t0 },
+                { alignedQuad->s0, alignedQuad->t1 },
+                { alignedQuad->s1, alignedQuad->t1 },
+            };
+
+            // We need to fill the vertex buffer by 6 vertices to render a quad as we are rendering a quad as 2 triangles
+            // The order used is in the 'order' array
+            // order = [0, 1, 2, 0, 2, 3] is meant to represent 2 triangles: 
+            // one by glyphVertices[0], glyphVertices[1], glyphVertices[2] and one by glyphVertices[0], glyphVertices[2], glyphVertices[3]
+            for(int i = 0; i < 6; i++)
+            {
+                localState.vertices[localState.vertexIndex + i].position = glm::vec3(glyphVertices[order[i]], position.z);
+                localState.vertices[localState.vertexIndex + i].color = color;
+                localState.vertices[localState.vertexIndex + i].texCoord = glyphTextureCoords[order[i]];
+            }
+
+            localState.vertexIndex += 6;
+
+            // Update the position to render the next glyph specified by packedChar->xadvance.
+            localPosition.x += packedChar->xadvance * pixelScale * size;
         }
 
-        localState.vertexIndex += 6;
-
-        // Update the position to render the next glyph specified by packedChar->xadvance.
-        position.x += packedChar->xadvance * pixelScale * size;
+        // Handle newlines seperately.
+        else if(ch == '\n')
+        {
+            // advance y by fontSize, reset x-coordinate
+            localPosition.y -= fontSize * pixelScale * size;
+            localPosition.x = position.x;
+        }
     }
 }
 
@@ -547,9 +565,10 @@ int main()
         DrawBegin();
 
         // Add more DrawText() calls here.
+        DrawText("stb_truetype.h example", { -0.8f, 0.4f, 0.0f }, { 0.9f, 0.2f, 0.3f, 1.0f }, 1.0f);
         DrawText(textToDisplay, { -1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, 0.7f);
         DrawText("The color of text can be changed too!", { -0.5f, -0.4f, 0.0f }, { 0.1f, 0.5f, 1.0f, 1.0f }, 0.5f);
-        DrawText("stb_truetype.h example", { -0.8f, 0.4f, 0.0f }, { 0.9f, 0.2f, 0.3f, 1.0f }, 1.0f);
+        DrawText("This is a \nNewline demo", { -0.9f, -0.7f, 0.0f }, { 0.7f, 0.8f, 0.0f, 1.0f }, 0.6f);
         
         RenderFrame();
         UpdateWindow();
